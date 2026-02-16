@@ -15,5 +15,6 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(VoxelWorldPlugin::with_config(VoxelWorld))
         .add_systems(Startup, (world::setup_voxel_camera, player::setup_player))
+        .add_systems(Update, player::mouse_look)
         .run();
 }
