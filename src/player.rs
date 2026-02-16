@@ -202,6 +202,102 @@ pub fn apply_movement(
     }
 }
 
+/// Resolves collision with solid voxels: pushes player out of blocks and sets grounded when standing on a surface (T043).
+/// Runs after query_voxel_colliders; uses CollidingVoxels to resolve penetration and set Grounded.
+pub fn resolve_voxel_collision(
+    mut query: Query<
+        (
+            &CollidingVoxels,
+            &mut Transform,
+            &mut Grounded,
+            &mut PlayerVelocity,
+        ),
+        With<Player>,
+    >,
+) {
+    let half_w = PLAYER_WIDTH * 0.5;
+    let half_h = PLAYER_HEIGHT * 0.5;
+    for (colliders, mut transform, mut grounded, mut velocity) in query.iter_mut() {
+        let pos = &mut transform.translation;
+        let mut push_up = 0.0_f32;
+        let mut push_down = 0.0_f32;
+        let mut push_x_neg = 0.0_f32;
+        let mut push_x_pos = 0.0_f32;
+        let mut push_z_neg = 0.0_f32;
+        let mut push_z_pos = 0.0_f32;
+
+        let player_min = Vec3::new(pos.x - half_w, pos.y, pos.z - half_w);
+        let player_max = Vec3::new(pos.x + half_w, pos.y + PLAYER_HEIGHT, pos.z + half_w);
+        let player_center_y = pos.y + half_h;
+
+        for &v in &colliders.0 {
+            let vx = v.x as f32;
+            let vy = v.y as f32;
+            let vz = v.z as f32;
+            let voxel_min = Vec3::new(vx, vy, vz);
+            let voxel_max = Vec3::new(vx + 1.0, vy + 1.0, vz + 1.0);
+            let voxel_center_y = vy + 0.5;
+
+            let overlap_x = player_max.x.min(voxel_max.x) - player_min.x.max(voxel_min.x);
+            let overlap_y = player_max.y.min(voxel_max.y) - player_min.y.max(voxel_min.y);
+            let overlap_z = player_max.z.min(voxel_max.z) - player_min.z.max(voxel_min.z);
+
+            if overlap_x <= 0.0 || overlap_y <= 0.0 || overlap_z <= 0.0 {
+                continue;
+            }
+
+            if overlap_y > 0.0 {
+                if player_center_y < voxel_center_y {
+                    push_up = push_up.max(overlap_y);
+                } else {
+                    push_down = push_down.max(overlap_y);
+                }
+            }
+            if overlap_x > 0.0 {
+                let player_center_x = pos.x;
+                let voxel_center_x = vx + 0.5;
+                if player_center_x < voxel_center_x {
+                    push_x_neg = push_x_neg.max(overlap_x);
+                } else {
+                    push_x_pos = push_x_pos.max(overlap_x);
+                }
+            }
+            if overlap_z > 0.0 {
+                let player_center_z = pos.z;
+                let voxel_center_z = vz + 0.5;
+                if player_center_z < voxel_center_z {
+                    push_z_neg = push_z_neg.max(overlap_z);
+                } else {
+                    push_z_pos = push_z_pos.max(overlap_z);
+                }
+            }
+        }
+
+        if push_up > 0.0 && (push_down <= 0.0 || push_up <= push_down) {
+            pos.y += push_up;
+            grounded.0 = true;
+            velocity.value.y = velocity.value.y.max(0.0);
+        } else if push_down > 0.0 {
+            pos.y -= push_down;
+            grounded.0 = false;
+            velocity.value.y = velocity.value.y.min(0.0);
+        } else {
+            grounded.0 = false;
+        }
+
+        if push_x_neg > 0.0 && (push_x_pos <= 0.0 || push_x_neg <= push_x_pos) {
+            pos.x -= push_x_neg;
+        } else if push_x_pos > 0.0 {
+            pos.x += push_x_pos;
+        }
+        if push_z_neg > 0.0 && (push_z_pos <= 0.0 || push_z_neg <= push_z_pos) {
+            pos.z -= push_z_neg;
+        } else if push_z_pos > 0.0 {
+            pos.z += push_z_pos;
+        }
+    }
+}
+
 /// Queries the voxel world for solid blocks at the player AABB; treats solid blocks as colliders (T042).
 /// Fills CollidingVoxels with voxel positions that overlap the player and are solid.
 pub fn query_voxel_colliders(
@@ -233,17 +329,3 @@ pub fn query_voxel_colliders(
     }
 }
 
-/// Temporary ground plane at Y=0 until voxel collision is implemented (T042/T043).
-/// Prevents the player from falling through the world so the view stays above terrain.
-pub fn temporary_ground_plane(
-    mut query: Query<(&mut Transform, &mut Grounded), With<Player>>,
-) {
-    for (mut transform, mut grounded) in query.iter_mut() {
-        if transform.translation.y <= 0.0 {
-            transform.translation.y = 0.0;
-            grounded.0 = true;
-        } else {
-            grounded.0 = false;
-        }
-    }
-}

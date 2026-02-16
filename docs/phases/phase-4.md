@@ -24,7 +24,7 @@
 ### Collision With Voxel World
 - [ ] Section Complete
 - [x] T042 Query the voxel world (e.g. bevy_voxel_world API) for solid blocks at player AABB or capsule; treat solid blocks as colliders.
-- [ ] T043 Resolve collision: prevent penetration (e.g. push player out of blocks) and set “grounded” when standing on a solid surface so gravity and jump behave correctly.
+- [x] T043 Resolve collision: prevent penetration (e.g. push player out of blocks) and set “grounded” when standing on a solid surface so gravity and jump behave correctly.
 - [ ] T044 Handle vertical collision (ceiling) so the player does not get stuck in blocks above.
 
 ### Physics & Tuning
