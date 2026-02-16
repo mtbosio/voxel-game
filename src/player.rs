@@ -3,7 +3,7 @@
 
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use bevy_voxel_world::prelude::*;
+use bevy_voxel_world::prelude::{VoxelWorld as VoxelWorldParam, VoxelWorldCamera, WorldVoxel};
 
 use crate::world::VoxelWorld;
 
@@ -57,6 +57,16 @@ pub const SPRINT_SPEED: f32 = 6.0;
 /// Minecraft-like default ~1.62m; use 1.6 for a round value.
 pub const PLAYER_EYE_HEIGHT: f32 = 1.6;
 
+/// Total player height for collision AABB (T042). Minecraft-like ~1.8m.
+pub const PLAYER_HEIGHT: f32 = 1.8;
+
+/// Player width (XZ) for collision AABB (T042). Minecraft-like ~0.6m.
+pub const PLAYER_WIDTH: f32 = 0.6;
+
+/// Solid voxel positions that overlap the player AABB (T042). Updated each frame; T043 uses for collision resolution.
+#[derive(Component, Default)]
+pub struct CollidingVoxels(pub Vec<IVec3>);
+
 /// Spawns the player entity with a first-person camera at eye height.
 /// Camera is a child of the player so it follows the player transform.
 pub fn setup_player(mut commands: Commands) {
@@ -71,6 +81,7 @@ pub fn setup_player(mut commands: Commands) {
             value: Vec3::ZERO,
         },
         Grounded(false),
+        CollidingVoxels::default(),
         Transform::from_translation(spawn_position),
         GlobalTransform::default(),
     )).with_children(|parent| {
@@ -188,6 +199,37 @@ pub fn apply_movement(
         }
 
         transform.translation += velocity.value * dt;
+    }
+}
+
+/// Queries the voxel world for solid blocks at the player AABB; treats solid blocks as colliders (T042).
+/// Fills CollidingVoxels with voxel positions that overlap the player and are solid.
+pub fn query_voxel_colliders(
+    voxel_world: VoxelWorldParam<VoxelWorld>,
+    mut query: Query<(&Transform, &mut CollidingVoxels), With<Player>>,
+) {
+    let half_w = PLAYER_WIDTH * 0.5;
+    let half_h = PLAYER_HEIGHT * 0.5;
+    for (transform, mut colliders) in query.iter_mut() {
+        colliders.0.clear();
+        let pos = transform.translation;
+        let center = pos + Vec3::new(0.0, half_h, 0.0);
+        let min_x = (center.x - half_w).floor() as i32;
+        let max_x = (center.x + half_w).floor() as i32;
+        let min_y = (center.y - half_h).floor() as i32;
+        let max_y = (center.y + half_h).floor() as i32;
+        let min_z = (center.z - half_w).floor() as i32;
+        let max_z = (center.z + half_w).floor() as i32;
+        for x in min_x..=max_x {
+            for y in min_y..=max_y {
+                for z in min_z..=max_z {
+                    let v = voxel_world.get_voxel(IVec3::new(x, y, z));
+                    if let WorldVoxel::Solid(_) = v {
+                        colliders.0.push(IVec3::new(x, y, z));
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -31,7 +31,8 @@ fn main() {
                 player::mouse_look,
                 player::movement_input.after(player::mouse_look),
                 player::apply_movement.after(player::movement_input),
-                player::temporary_ground_plane.after(player::apply_movement),
+                player::query_voxel_colliders.after(player::apply_movement),
+                player::temporary_ground_plane.after(player::query_voxel_colliders),
             ),
         )
         .run();
