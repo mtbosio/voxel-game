@@ -13,7 +13,7 @@
 - [ ] Section Complete
 - [x] T001 Create Cargo workspace (e.g. `voxel-game`) with binary target; pin Bevy version in `Cargo.toml` per `@docs/architecture.md`.
 - [x] T002 Add dependencies: `bevy`, `serde`, `bincode`, `glam`, `rand`, `noise`, `tracing` (or use Bevy’s re-exports where applicable); ensure no extra voxel/networking crates yet.
-- [ ] T003 Create minimal `main.rs` that runs a Bevy app with default plugin and a window; verify window opens and closes.
+- [x] T003 Create minimal `main.rs` that runs a Bevy app with default plugin and a window; verify window opens and closes.
 - [ ] T004 Define project layout: e.g. `src/` modules for future systems (world, player, ui, net) without implementing them; keep `main.rs` as entry point.
 
 ### Configuration & Tooling
