@@ -28,9 +28,9 @@
 - [x] T009 Add any environment or config steps (e.g. Rust version) to `docs/setup.md` in chronological order.
 
 ### Verification
-- [ ] Section Complete
+- [x] Section Complete
 - [x] T010 Run `cargo clippy` (or equivalent) and fix any warnings; ensure no build errors.
-- [ ] T011 Confirm runnable window and clean exit; mark Phase 1 complete when all tasks are done.
+- [x] T011 Confirm runnable window and clean exit; mark Phase 1 complete when all tasks are done.
 
 ## Lessons Learned
 
