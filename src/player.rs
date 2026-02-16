@@ -25,6 +25,34 @@ pub const MOUSE_SENSITIVITY: f32 = 0.001;
 const PITCH_MIN: f32 = -1.553_343_f32;
 const PITCH_MAX: f32 = 1.553_343_f32;
 
+/// Desired horizontal movement direction in world XZ (T039). Y is 0; length 0 or 1.
+#[derive(Component)]
+pub struct PlayerMovementInput {
+    pub direction: Vec3,
+}
+
+/// Current velocity in world space (m/s). T043 will zero vertical when grounded.
+#[derive(Component)]
+pub struct PlayerVelocity {
+    pub value: Vec3,
+}
+
+/// Whether the player is standing on solid ground (T043 sets from collision; T040 uses for gravity).
+#[derive(Component)]
+pub struct Grounded(pub bool);
+
+/// Horizontal walk speed in m/s (T040).
+pub const WALK_SPEED: f32 = 4.5;
+
+/// Gravity magnitude (positive; applied as negative Y) in m/s² (T040).
+pub const GRAVITY: f32 = 20.0;
+
+/// Initial upward velocity for jump in m/s (T041). Height ≈ JUMP_VELOCITY² / (2 * GRAVITY).
+pub const JUMP_VELOCITY: f32 = 7.0;
+
+/// Horizontal sprint speed in m/s when Shift held (T041).
+pub const SPRINT_SPEED: f32 = 6.0;
+
 /// Eye height offset from player feet (camera attached at this height).
 /// Minecraft-like default ~1.62m; use 1.6 for a round value.
 pub const PLAYER_EYE_HEIGHT: f32 = 1.6;
@@ -36,6 +64,13 @@ pub fn setup_player(mut commands: Commands) {
     commands.spawn((
         Player,
         PlayerLook { yaw: 0.0, pitch: 0.0 },
+        PlayerMovementInput {
+            direction: Vec3::ZERO,
+        },
+        PlayerVelocity {
+            value: Vec3::ZERO,
+        },
+        Grounded(false),
         Transform::from_translation(spawn_position),
         GlobalTransform::default(),
     )).with_children(|parent| {
@@ -73,5 +108,74 @@ pub fn mouse_look(
                 }
             }
         }
+    }
+}
+
+/// Updates desired movement direction from WASD relative to camera yaw (T039).
+/// Forward/back/strafe match view direction in the horizontal plane.
+pub fn movement_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut query: Query<(&PlayerLook, &mut PlayerMovementInput), With<Player>>,
+) {
+    for (look, mut input) in query.iter_mut() {
+        let yaw = look.yaw;
+        let forward = Vec3::new(yaw.sin(), 0.0, -yaw.cos());
+        let right = Vec3::new(yaw.cos(), 0.0, yaw.sin());
+
+        let mut dir = Vec3::ZERO;
+        if keyboard.pressed(KeyCode::KeyW) {
+            dir += forward;
+        }
+        if keyboard.pressed(KeyCode::KeyS) {
+            dir -= forward;
+        }
+        if keyboard.pressed(KeyCode::KeyD) {
+            dir += right;
+        }
+        if keyboard.pressed(KeyCode::KeyA) {
+            dir -= right;
+        }
+
+        input.direction = if dir.length_squared() > 0.0 {
+            dir.normalize_or_zero()
+        } else {
+            Vec3::ZERO
+        };
+    }
+}
+
+/// Applies horizontal movement from input (configurable speed), gravity when not grounded, jump when grounded, and sprint (T040, T041).
+pub fn apply_movement(
+    time: Res<Time>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut query: Query<
+        (
+            &PlayerMovementInput,
+            &Grounded,
+            &mut PlayerVelocity,
+            &mut Transform,
+        ),
+        With<Player>,
+    >,
+) {
+    let dt = time.delta_secs();
+    let sprinting = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+    let speed = if sprinting { SPRINT_SPEED } else { WALK_SPEED };
+
+    for (input, grounded, mut velocity, mut transform) in query.iter_mut() {
+        velocity.value.x = input.direction.x * speed;
+        velocity.value.z = input.direction.z * speed;
+
+        if grounded.0 {
+            if keyboard.just_pressed(KeyCode::Space) {
+                velocity.value.y = JUMP_VELOCITY;
+            } else {
+                velocity.value.y = 0.0;
+            }
+        } else {
+            velocity.value.y -= GRAVITY * dt;
+        }
+
+        transform.translation += velocity.value * dt;
     }
 }
