@@ -7,7 +7,13 @@ mod ui;
 mod world;
 
 use bevy::prelude::*;
+use bevy_voxel_world::prelude::*;
+use world::VoxelWorld;
 
 fn main() {
-    App::new().add_plugins(DefaultPlugins).run();
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_plugins(VoxelWorldPlugin::with_config(VoxelWorld))
+        .add_systems(Startup, world::setup_voxel_camera)
+        .run();
 }
