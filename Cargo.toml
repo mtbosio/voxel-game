@@ -1,0 +1,10 @@
+[package]
+name = "voxel-game"
+version = "0.1.0"
+edition = "2021"
+description = "Minecraft-like voxel survival game"
+repository = ""
+
+[dependencies]
+# Pinned per docs/architecture.md; upgrades are architectural changes.
+bevy = "0.18"
