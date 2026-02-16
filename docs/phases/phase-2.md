@@ -13,7 +13,7 @@
 - [ ] Section Complete
 - [x] T012 Add `bevy_voxel_world` (and its dependencies, e.g. `block-mesh`) to `Cargo.toml`; ensure version is compatible with pinned Bevy.
 - [x] T013 Register the bevy_voxel_world plugin in the Bevy app and configure chunk size / spawn range so the world loads around the origin.
-- [ ] T014 Implement a terrain lookup function that returns block type (e.g. voxel ID or material index) from world position (e.g. `IVec3`); start with a simple heightmap (e.g. flat or single noise layer).
+- [x] T014 Implement a terrain lookup function that returns block type (e.g. voxel ID or material index) from world position (e.g. `IVec3`); start with a simple heightmap (e.g. flat or single noise layer).
 - [ ] T015 Wire the terrain function into bevy_voxel_world so chunks are generated with the correct blocks; verify terrain appears in-game.
 
 ### Noise-Based Terrain

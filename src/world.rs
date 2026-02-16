@@ -6,6 +6,20 @@ use std::sync::Arc;
 use bevy::prelude::*;
 use bevy_voxel_world::prelude::*;
 
+/// Simple flat heightmap: surface at constant Y (T014). T016 will add noise.
+const TERRAIN_SURFACE_Y: i32 = 0;
+
+/// Terrain lookup: returns block type (voxel) at world position from a simple heightmap (T014).
+/// Below surface = solid (material index 0); at or above surface = air.
+#[must_use]
+pub fn terrain_lookup(pos: IVec3) -> WorldVoxel {
+    if pos.y < TERRAIN_SURFACE_Y {
+        WorldVoxel::Solid(0)
+    } else {
+        WorldVoxel::Air
+    }
+}
+
 /// Voxel world config: chunk spawn range and minimal terrain so the world loads around the origin (T013).
 #[derive(Resource, Clone, Default)]
 pub struct VoxelWorld;
@@ -26,14 +40,7 @@ impl VoxelWorldConfig for VoxelWorld {
 
     fn voxel_lookup_delegate(&self) -> VoxelLookupDelegate<Self::MaterialIndex> {
         Box::new(move |_chunk_pos, _lod, _previous| {
-            // Placeholder: flat floor at y = 0 so chunks visibly load. T014/T015 will add real terrain.
-            Box::new(move |pos: IVec3, _prev| {
-                if pos.y < 0 {
-                    WorldVoxel::Solid(0)
-                } else {
-                    WorldVoxel::Air
-                }
-            })
+            Box::new(move |pos: IVec3, _prev| terrain_lookup(pos))
         })
     }
 
