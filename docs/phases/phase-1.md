@@ -23,9 +23,9 @@
 - [x] T007 Run `cargo build` and `cargo run` successfully; document exact commands.
 
 ### Setup Documentation
-- [ ] Section Complete
-- [ ] T008 Create `@docs/setup.md` with: clone repo, install Rust toolchain, `cargo build` and `cargo run`, and how to verify the window launches.
-- [ ] T009 Add any environment or config steps (e.g. Rust version) to `docs/setup.md` in chronological order.
+- [x] Section Complete
+- [x] T008 Create `@docs/setup.md` with: clone repo, install Rust toolchain, `cargo build` and `cargo run`, and how to verify the window launches.
+- [x] T009 Add any environment or config steps (e.g. Rust version) to `docs/setup.md` in chronological order.
 
 ### Verification
 - [ ] Section Complete
