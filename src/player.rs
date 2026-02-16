@@ -31,6 +31,22 @@ pub struct PlayerMovementInput {
     pub direction: Vec3,
 }
 
+/// Current velocity in world space (m/s). T043 will zero vertical when grounded.
+#[derive(Component)]
+pub struct PlayerVelocity {
+    pub value: Vec3,
+}
+
+/// Whether the player is standing on solid ground (T043 sets from collision; T040 uses for gravity).
+#[derive(Component)]
+pub struct Grounded(pub bool);
+
+/// Horizontal walk speed in m/s (T040).
+pub const WALK_SPEED: f32 = 4.5;
+
+/// Gravity magnitude (positive; applied as negative Y) in m/s² (T040).
+pub const GRAVITY: f32 = 20.0;
+
 /// Eye height offset from player feet (camera attached at this height).
 /// Minecraft-like default ~1.62m; use 1.6 for a round value.
 pub const PLAYER_EYE_HEIGHT: f32 = 1.6;
@@ -45,6 +61,10 @@ pub fn setup_player(mut commands: Commands) {
         PlayerMovementInput {
             direction: Vec3::ZERO,
         },
+        PlayerVelocity {
+            value: Vec3::ZERO,
+        },
+        Grounded(false),
         Transform::from_translation(spawn_position),
         GlobalTransform::default(),
     )).with_children(|parent| {
@@ -115,5 +135,33 @@ pub fn movement_input(
         } else {
             Vec3::ZERO
         };
+    }
+}
+
+/// Applies horizontal movement from input (configurable speed) and gravity when not grounded (T040).
+pub fn apply_movement(
+    time: Res<Time>,
+    mut query: Query<
+        (
+            &PlayerMovementInput,
+            &Grounded,
+            &mut PlayerVelocity,
+            &mut Transform,
+        ),
+        With<Player>,
+    >,
+) {
+    let dt = time.delta_secs();
+    for (input, grounded, mut velocity, mut transform) in query.iter_mut() {
+        velocity.value.x = input.direction.x * WALK_SPEED;
+        velocity.value.z = input.direction.z * WALK_SPEED;
+
+        if grounded.0 {
+            velocity.value.y = 0.0;
+        } else {
+            velocity.value.y -= GRAVITY * dt;
+        }
+
+        transform.translation += velocity.value * dt;
     }
 }

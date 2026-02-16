@@ -18,7 +18,7 @@
 ### Movement
 - [ ] Section Complete
 - [x] T039 Implement movement input (WASD) relative to camera yaw so forward/back/strafe match view direction.
-- [ ] T040 Apply horizontal movement with configurable speed; apply gravity (negative Y) when not grounded.
+- [x] T040 Apply horizontal movement with configurable speed; apply gravity (negative Y) when not grounded.
 - [ ] T041 Implement jump: single jump when grounded (e.g. space); optional sprint (e.g. shift) for faster movement.
 
 ### Collision With Voxel World
