@@ -111,16 +111,27 @@ pub fn mouse_look(
     }
 }
 
+/// Updates desired movement direction from WASD relative to where the player is looking (T039).
+/// Uses the player Transform rotation (same as camera) so forward/back/strafe match view.
+fn horizontal_xz(v: Vec3) -> Vec3 {
+    let flat = Vec3::new(v.x, 0.0, v.z);
+    let len_sq = flat.length_squared();
+    if len_sq > 0.0 {
+        flat / len_sq.sqrt()
+    } else {
+        Vec3::ZERO
+    }
+}
+
 /// Updates desired movement direction from WASD relative to camera yaw (T039).
 /// Forward/back/strafe match view direction in the horizontal plane.
 pub fn movement_input(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&PlayerLook, &mut PlayerMovementInput), With<Player>>,
+    mut query: Query<(&Transform, &mut PlayerMovementInput), With<Player>>,
 ) {
-    for (look, mut input) in query.iter_mut() {
-        let yaw = look.yaw;
-        let forward = Vec3::new(yaw.sin(), 0.0, -yaw.cos());
-        let right = Vec3::new(yaw.cos(), 0.0, yaw.sin());
+    for (transform, mut input) in query.iter_mut() {
+        let forward = horizontal_xz(transform.rotation * Vec3::NEG_Z);
+        let right = horizontal_xz(transform.rotation * Vec3::X);
 
         let mut dir = Vec3::ZERO;
         if keyboard.pressed(KeyCode::KeyW) {
@@ -177,5 +188,20 @@ pub fn apply_movement(
         }
 
         transform.translation += velocity.value * dt;
+    }
+}
+
+/// Temporary ground plane at Y=0 until voxel collision is implemented (T042/T043).
+/// Prevents the player from falling through the world so the view stays above terrain.
+pub fn temporary_ground_plane(
+    mut query: Query<(&mut Transform, &mut Grounded), With<Player>>,
+) {
+    for (mut transform, mut grounded) in query.iter_mut() {
+        if transform.translation.y <= 0.0 {
+            transform.translation.y = 0.0;
+            grounded.0 = true;
+        } else {
+            grounded.0 = false;
+        }
     }
 }

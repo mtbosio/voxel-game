@@ -27,7 +27,12 @@ fn main() {
         .add_systems(Startup, (world::setup_voxel_camera, player::setup_player))
         .add_systems(
             Update,
-            (player::mouse_look, player::movement_input, player::apply_movement),
+            (
+                player::mouse_look,
+                player::movement_input.after(player::mouse_look),
+                player::apply_movement.after(player::movement_input),
+                player::temporary_ground_plane.after(player::apply_movement),
+            ),
         )
         .run();
 }
