@@ -11,7 +11,7 @@
 
 ### Player Entity & Camera
 - [ ] Section Complete
-- [ ] T036 Spawn a player entity with a camera (first-person); position camera at eye height and attach to player transform.
+- [x] T036 Spawn a player entity with a camera (first-person); position camera at eye height and attach to player transform.
 - [ ] T037 Implement mouse look: yaw (horizontal) and pitch (vertical) with sensitivity and pitch clamping to avoid flip.
 - [ ] T038 Use Bevy’s input system for mouse motion and cursor capture (cursor locked/hidden during play).
 

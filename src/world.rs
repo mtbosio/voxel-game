@@ -50,13 +50,8 @@ impl VoxelWorldConfig for VoxelWorld {
     }
 }
 
-/// Spawns the camera (with VoxelWorldCamera so chunks load around it) and default lighting.
+/// Spawns default lighting. Player + first-person camera are spawned by player::setup_player.
 pub fn setup_voxel_camera(mut commands: Commands) {
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_xyz(0.0, 8.0, 16.0).looking_at(Vec3::ZERO, Vec3::Y),
-        VoxelWorldCamera::<VoxelWorld>::default(),
-    ));
     commands.spawn((
         DirectionalLight::default(),
         Transform::from_xyz(1.0, 1.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y),
