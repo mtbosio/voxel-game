@@ -11,15 +11,24 @@ use noise::{NoiseFn, Perlin};
 static TERRAIN_NOISE: OnceLock<Perlin> = OnceLock::new();
 
 fn terrain_noise() -> &'static Perlin {
-    TERRAIN_NOISE.get_or_init(|| Perlin::new(0))
+    TERRAIN_NOISE.get_or_init(|| Perlin::new(TERRAIN_NOISE_SEED))
 }
 
-/// Base surface height; noise is added to this (T016). T018 will tune scale/amplitude.
+// -----------------------------------------------------------------------------
+// Terrain configuration (T018): scale and height for varied, navigable terrain.
+// All magic numbers for procedural height are below; change these to tune feel.
+//
+// - TERRAIN_NOISE_SEED: Perlin RNG seed; same seed = same world shape.
+// - TERRAIN_BASE_Y: Average surface level (blocks). Noise is added on top.
+// - TERRAIN_NOISE_FREQ: Input scale for noise (per block). Lower = smoother
+//   hills (wider features); higher = more bumpy/jagged. ~0.01–0.03 is typical.
+// - TERRAIN_NOISE_AMP: Height variation in blocks (±). Lower = flatter;
+//   higher = steeper. Keep moderate (e.g. 4–10) for walkable terrain.
+// -----------------------------------------------------------------------------
+const TERRAIN_NOISE_SEED: u32 = 0;
 const TERRAIN_BASE_Y: i32 = 0;
-/// Noise frequency (world units). Smaller = smoother, larger = more variation.
-const TERRAIN_NOISE_FREQ: f64 = 0.02;
-/// Noise amplitude in blocks; height varies by roughly ± this amount.
-const TERRAIN_NOISE_AMP: f64 = 8.0;
+const TERRAIN_NOISE_FREQ: f64 = 0.012;
+const TERRAIN_NOISE_AMP: f64 = 6.0;
 
 /// Material indices for surface layers (T017). T019/T021 formalize block types and persistence.
 const MATERIAL_STONE: u8 = 0;
