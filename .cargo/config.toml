@@ -1,0 +1,6 @@
+# Cargo build configuration.
+# Add [build] target or build flags here if needed (e.g. for CI or specific platforms).
+
+[build]
+# Optional: set target for all builds, e.g. "x86_64-pc-windows-msvc"
+# target = "x86_64-pc-windows-msvc"

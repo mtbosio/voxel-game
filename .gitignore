@@ -1,0 +1,22 @@
+# Build output
+target/
+
+# Cargo.lock: uncomment the line below to ignore (e.g. for libraries).
+# For applications, keeping Cargo.lock in the repo is recommended for reproducible builds.
+# Cargo.lock
+
+# Local env and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# IDE and editor
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.swp
+*.swo
+*~
+.DS_Store

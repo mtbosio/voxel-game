@@ -17,10 +17,10 @@
 - [x] T004 Define project layout: e.g. `src/` modules for future systems (world, player, ui, net) without implementing them; keep `main.rs` as entry point.
 
 ### Configuration & Tooling
-- [ ] Section Complete
-- [ ] T005 Configure `Cargo.toml` (edition, release profile, optional lints) and add `.cargo/config.toml` if needed (e.g. target, build flags).
-- [ ] T006 Add `.gitignore` for `target/`, `Cargo.lock` (if not desired in repo), and any local env or IDE files.
-- [ ] T007 Run `cargo build` and `cargo run` successfully; document exact commands.
+- [x] Section Complete
+- [x] T005 Configure `Cargo.toml` (edition, release profile, optional lints) and add `.cargo/config.toml` if needed (e.g. target, build flags).
+- [x] T006 Add `.gitignore` for `target/`, `Cargo.lock` (if not desired in repo), and any local env or IDE files.
+- [x] T007 Run `cargo build` and `cargo run` successfully; document exact commands.
 
 ### Setup Documentation
 - [ ] Section Complete
