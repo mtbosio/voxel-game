@@ -47,6 +47,12 @@ pub const WALK_SPEED: f32 = 4.5;
 /// Gravity magnitude (positive; applied as negative Y) in m/s² (T040).
 pub const GRAVITY: f32 = 20.0;
 
+/// Initial upward velocity for jump in m/s (T041). Height ≈ JUMP_VELOCITY² / (2 * GRAVITY).
+pub const JUMP_VELOCITY: f32 = 7.0;
+
+/// Horizontal sprint speed in m/s when Shift held (T041).
+pub const SPRINT_SPEED: f32 = 6.0;
+
 /// Eye height offset from player feet (camera attached at this height).
 /// Minecraft-like default ~1.62m; use 1.6 for a round value.
 pub const PLAYER_EYE_HEIGHT: f32 = 1.6;
@@ -138,9 +144,10 @@ pub fn movement_input(
     }
 }
 
-/// Applies horizontal movement from input (configurable speed) and gravity when not grounded (T040).
+/// Applies horizontal movement from input (configurable speed), gravity when not grounded, jump when grounded, and sprint (T040, T041).
 pub fn apply_movement(
     time: Res<Time>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     mut query: Query<
         (
             &PlayerMovementInput,
@@ -152,12 +159,19 @@ pub fn apply_movement(
     >,
 ) {
     let dt = time.delta_secs();
+    let sprinting = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+    let speed = if sprinting { SPRINT_SPEED } else { WALK_SPEED };
+
     for (input, grounded, mut velocity, mut transform) in query.iter_mut() {
-        velocity.value.x = input.direction.x * WALK_SPEED;
-        velocity.value.z = input.direction.z * WALK_SPEED;
+        velocity.value.x = input.direction.x * speed;
+        velocity.value.z = input.direction.z * speed;
 
         if grounded.0 {
-            velocity.value.y = 0.0;
+            if keyboard.just_pressed(KeyCode::Space) {
+                velocity.value.y = JUMP_VELOCITY;
+            } else {
+                velocity.value.y = 0.0;
+            }
         } else {
             velocity.value.y -= GRAVITY * dt;
         }
