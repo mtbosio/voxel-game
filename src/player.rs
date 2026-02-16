@@ -3,7 +3,7 @@
 
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use bevy_voxel_world::prelude::*;
+use bevy_voxel_world::prelude::{VoxelWorld as VoxelWorldParam, VoxelWorldCamera, WorldVoxel};
 
 use crate::world::VoxelWorld;
 
@@ -57,6 +57,16 @@ pub const SPRINT_SPEED: f32 = 6.0;
 /// Minecraft-like default ~1.62m; use 1.6 for a round value.
 pub const PLAYER_EYE_HEIGHT: f32 = 1.6;
 
+/// Total player height for collision AABB (T042). Minecraft-like ~1.8m.
+pub const PLAYER_HEIGHT: f32 = 1.8;
+
+/// Player width (XZ) for collision AABB (T042). Minecraft-like ~0.6m.
+pub const PLAYER_WIDTH: f32 = 0.6;
+
+/// Solid voxel positions that overlap the player AABB (T042). Updated each frame; T043 uses for collision resolution.
+#[derive(Component, Default)]
+pub struct CollidingVoxels(pub Vec<IVec3>);
+
 /// Spawns the player entity with a first-person camera at eye height.
 /// Camera is a child of the player so it follows the player transform.
 pub fn setup_player(mut commands: Commands) {
@@ -71,6 +81,7 @@ pub fn setup_player(mut commands: Commands) {
             value: Vec3::ZERO,
         },
         Grounded(false),
+        CollidingVoxels::default(),
         Transform::from_translation(spawn_position),
         GlobalTransform::default(),
     )).with_children(|parent| {
@@ -191,17 +202,132 @@ pub fn apply_movement(
     }
 }
 
-/// Temporary ground plane at Y=0 until voxel collision is implemented (T042/T043).
-/// Prevents the player from falling through the world so the view stays above terrain.
-pub fn temporary_ground_plane(
-    mut query: Query<(&mut Transform, &mut Grounded), With<Player>>,
+/// Resolves collision with solid voxels: pushes player out of blocks and sets grounded when standing on a surface (T043).
+/// Vertical collision: floor (push up, set grounded) and ceiling (push down, zero upward velocity) so the player does not get stuck (T044).
+/// Runs after query_voxel_colliders; uses CollidingVoxels to resolve penetration and set Grounded.
+pub fn resolve_voxel_collision(
+    mut query: Query<
+        (
+            &CollidingVoxels,
+            &mut Transform,
+            &mut Grounded,
+            &mut PlayerVelocity,
+        ),
+        With<Player>,
+    >,
 ) {
-    for (mut transform, mut grounded) in query.iter_mut() {
-        if transform.translation.y <= 0.0 {
-            transform.translation.y = 0.0;
+    let half_w = PLAYER_WIDTH * 0.5;
+    let half_h = PLAYER_HEIGHT * 0.5;
+    for (colliders, mut transform, mut grounded, mut velocity) in query.iter_mut() {
+        let pos = &mut transform.translation;
+        let mut push_up = 0.0_f32;
+        let mut push_down = 0.0_f32;
+        let mut push_x_neg = 0.0_f32;
+        let mut push_x_pos = 0.0_f32;
+        let mut push_z_neg = 0.0_f32;
+        let mut push_z_pos = 0.0_f32;
+
+        let player_min = Vec3::new(pos.x - half_w, pos.y, pos.z - half_w);
+        let player_max = Vec3::new(pos.x + half_w, pos.y + PLAYER_HEIGHT, pos.z + half_w);
+        let player_center_y = pos.y + half_h;
+
+        for &v in &colliders.0 {
+            let vx = v.x as f32;
+            let vy = v.y as f32;
+            let vz = v.z as f32;
+            let voxel_min = Vec3::new(vx, vy, vz);
+            let voxel_max = Vec3::new(vx + 1.0, vy + 1.0, vz + 1.0);
+            let voxel_center_y = vy + 0.5;
+
+            let overlap_x = player_max.x.min(voxel_max.x) - player_min.x.max(voxel_min.x);
+            let overlap_y = player_max.y.min(voxel_max.y) - player_min.y.max(voxel_min.y);
+            let overlap_z = player_max.z.min(voxel_max.z) - player_min.z.max(voxel_min.z);
+
+            if overlap_x <= 0.0 || overlap_y <= 0.0 || overlap_z <= 0.0 {
+                continue;
+            }
+
+            if overlap_y > 0.0 {
+                if player_center_y < voxel_center_y {
+                    push_up = push_up.max(overlap_y);
+                } else {
+                    push_down = push_down.max(overlap_y);
+                }
+            }
+            if overlap_x > 0.0 {
+                let player_center_x = pos.x;
+                let voxel_center_x = vx + 0.5;
+                if player_center_x < voxel_center_x {
+                    push_x_neg = push_x_neg.max(overlap_x);
+                } else {
+                    push_x_pos = push_x_pos.max(overlap_x);
+                }
+            }
+            if overlap_z > 0.0 {
+                let player_center_z = pos.z;
+                let voxel_center_z = vz + 0.5;
+                if player_center_z < voxel_center_z {
+                    push_z_neg = push_z_neg.max(overlap_z);
+                } else {
+                    push_z_pos = push_z_pos.max(overlap_z);
+                }
+            }
+        }
+
+        if push_up > 0.0 && (push_down <= 0.0 || push_up <= push_down) {
+            pos.y += push_up;
             grounded.0 = true;
+            velocity.value.y = velocity.value.y.max(0.0);
+        } else if push_down > 0.0 {
+            // T044: ceiling — push player down out of block and cancel upward velocity so player does not get stuck
+            pos.y -= push_down;
+            grounded.0 = false;
+            velocity.value.y = velocity.value.y.min(0.0);
         } else {
             grounded.0 = false;
         }
+
+        if push_x_neg > 0.0 && (push_x_pos <= 0.0 || push_x_neg <= push_x_pos) {
+            pos.x -= push_x_neg;
+        } else if push_x_pos > 0.0 {
+            pos.x += push_x_pos;
+        }
+        if push_z_neg > 0.0 && (push_z_pos <= 0.0 || push_z_neg <= push_z_pos) {
+            pos.z -= push_z_neg;
+        } else if push_z_pos > 0.0 {
+            pos.z += push_z_pos;
+        }
     }
 }
+
+/// Queries the voxel world for solid blocks at the player AABB; treats solid blocks as colliders (T042).
+/// Fills CollidingVoxels with voxel positions that overlap the player and are solid.
+pub fn query_voxel_colliders(
+    voxel_world: VoxelWorldParam<VoxelWorld>,
+    mut query: Query<(&Transform, &mut CollidingVoxels), With<Player>>,
+) {
+    let half_w = PLAYER_WIDTH * 0.5;
+    let half_h = PLAYER_HEIGHT * 0.5;
+    for (transform, mut colliders) in query.iter_mut() {
+        colliders.0.clear();
+        let pos = transform.translation;
+        let center = pos + Vec3::new(0.0, half_h, 0.0);
+        let min_x = (center.x - half_w).floor() as i32;
+        let max_x = (center.x + half_w).floor() as i32;
+        let min_y = (center.y - half_h).floor() as i32;
+        let max_y = (center.y + half_h).floor() as i32;
+        let min_z = (center.z - half_w).floor() as i32;
+        let max_z = (center.z + half_w).floor() as i32;
+        for x in min_x..=max_x {
+            for y in min_y..=max_y {
+                for z in min_z..=max_z {
+                    let v = voxel_world.get_voxel(IVec3::new(x, y, z));
+                    if let WorldVoxel::Solid(_) = v {
+                        colliders.0.push(IVec3::new(x, y, z));
+                    }
+                }
+            }
+        }
+    }
+}
+
