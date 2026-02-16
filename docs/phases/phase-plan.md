@@ -5,7 +5,7 @@
 
 ## Phase Overview
 
-- [ ] Phase 1: Project Foundation — Rust + Bevy project setup, runnable window, project structure, and developer setup. *(In progress via `docs/phases/phase-1.md`.)*
+- [x] Phase 1: Project Foundation — Rust + Bevy project setup, runnable window, project structure, and developer setup. *(Complete; see `docs/phases/phase-1.md`.)*
 - [ ] Phase 2: Voxel World & Procedural Generation — Integrate bevy_voxel_world, noise-based terrain, chunk loading, and basic block types.
 - [ ] Phase 3: Biomes — Multiple biomes (e.g. forest, plains, desert) with distinct terrain and surface blocks.
 - [ ] Phase 4: Player & First-Person — First-person controller, movement, gravity, and collision with the voxel world.
