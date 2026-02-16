@@ -17,10 +17,10 @@
 - [x] T015 Wire the terrain function into bevy_voxel_world so chunks are generated with the correct blocks; verify terrain appears in-game.
 
 ### Noise-Based Terrain
-- [ ] Section Complete
-- [ ] T016 Add the `noise` crate per `@docs/architecture.md`; use it in the terrain function to generate height (e.g. Perlin/simplex) for terrain.
-- [ ] T017 Define surface layer: above a height threshold use grass (or top block), one layer below use dirt, below that use stone; ensure caves or overhangs are optional for this phase.
-- [ ] T018 Tune terrain scale and height so the world looks varied but navigable; document any magic numbers or config used.
+- [x] Section Complete
+- [x] T016 Add the `noise` crate per `@docs/architecture.md`; use it in the terrain function to generate height (e.g. Perlin/simplex) for terrain.
+- [x] T017 Define surface layer: above a height threshold use grass (or top block), one layer below use dirt, below that use stone; ensure caves or overhangs are optional for this phase.
+- [x] T018 Tune terrain scale and height so the world looks varied but navigable; document any magic numbers or config used.
 
 ### Block Types & Materials
 - [ ] Section Complete
