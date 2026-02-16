@@ -1,19 +1,37 @@
 //! World and voxel systems (Phase 2+).
 //! Chunk loading, terrain generation, and block types will be implemented here.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use bevy::prelude::*;
 use bevy_voxel_world::prelude::*;
+use noise::{NoiseFn, Perlin};
 
-/// Simple flat heightmap: surface at constant Y (T014). T016 will add noise.
-const TERRAIN_SURFACE_Y: i32 = 0;
+/// Perlin noise for terrain height (T016). Shared so the same (x, z) always yields the same height.
+static TERRAIN_NOISE: OnceLock<Perlin> = OnceLock::new();
 
-/// Terrain lookup: returns block type (voxel) at world position from a simple heightmap (T014).
-/// Below surface = solid (material index 0); at or above surface = air.
+fn terrain_noise() -> &'static Perlin {
+    TERRAIN_NOISE.get_or_init(|| Perlin::new(0))
+}
+
+/// Base surface height; noise is added to this (T016). T018 will tune scale/amplitude.
+const TERRAIN_BASE_Y: i32 = 0;
+/// Noise frequency (world units). Smaller = smoother, larger = more variation.
+const TERRAIN_NOISE_FREQ: f64 = 0.02;
+/// Noise amplitude in blocks; height varies by roughly ± this amount.
+const TERRAIN_NOISE_AMP: f64 = 8.0;
+
+/// Terrain lookup: returns block type (voxel) at world position (T014).
+/// Height is from Perlin noise at (x, z) (T016). Below surface = solid (material 0); at or above = air.
 #[must_use]
 pub fn terrain_lookup(pos: IVec3) -> WorldVoxel {
-    if pos.y < TERRAIN_SURFACE_Y {
+    let perlin = terrain_noise();
+    let sample = perlin.get([
+        f64::from(pos.x) * TERRAIN_NOISE_FREQ,
+        f64::from(pos.z) * TERRAIN_NOISE_FREQ,
+    ]);
+    let surface_y = TERRAIN_BASE_Y + (sample * TERRAIN_NOISE_AMP).round() as i32;
+    if pos.y < surface_y {
         WorldVoxel::Solid(0)
     } else {
         WorldVoxel::Air
