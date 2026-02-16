@@ -203,6 +203,7 @@ pub fn apply_movement(
 }
 
 /// Resolves collision with solid voxels: pushes player out of blocks and sets grounded when standing on a surface (T043).
+/// Vertical collision: floor (push up, set grounded) and ceiling (push down, zero upward velocity) so the player does not get stuck (T044).
 /// Runs after query_voxel_colliders; uses CollidingVoxels to resolve penetration and set Grounded.
 pub fn resolve_voxel_collision(
     mut query: Query<
@@ -278,6 +279,7 @@ pub fn resolve_voxel_collision(
             grounded.0 = true;
             velocity.value.y = velocity.value.y.max(0.0);
         } else if push_down > 0.0 {
+            // T044: ceiling — push player down out of block and cancel upward velocity so player does not get stuck
             pos.y -= push_down;
             grounded.0 = false;
             velocity.value.y = velocity.value.y.min(0.0);
