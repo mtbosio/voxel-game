@@ -17,7 +17,7 @@
 
 ### Movement
 - [ ] Section Complete
-- [ ] T039 Implement movement input (WASD) relative to camera yaw so forward/back/strafe match view direction.
+- [x] T039 Implement movement input (WASD) relative to camera yaw so forward/back/strafe match view direction.
 - [ ] T040 Apply horizontal movement with configurable speed; apply gravity (negative Y) when not grounded.
 - [ ] T041 Implement jump: single jump when grounded (e.g. space); optional sprint (e.g. shift) for faster movement.
 
