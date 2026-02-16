@@ -38,6 +38,7 @@ impl VoxelWorldConfig for VoxelWorld {
         2
     }
 
+    /// Terrain function wired for chunk generation (T015); chunks use terrain_lookup for block types.
     fn voxel_lookup_delegate(&self) -> VoxelLookupDelegate<Self::MaterialIndex> {
         Box::new(move |_chunk_pos, _lod, _previous| {
             Box::new(move |pos: IVec3, _prev| terrain_lookup(pos))
