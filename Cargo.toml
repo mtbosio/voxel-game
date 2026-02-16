@@ -17,6 +17,8 @@ unused_imports = "warn"
 [dependencies]
 # Pinned per docs/architecture.md; upgrades are architectural changes.
 bevy = "0.18"
+# Voxel world and meshing (architecture §2); brings in block-mesh.
+bevy_voxel_world = "0.15"
 # Serialization (architecture §5).
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
