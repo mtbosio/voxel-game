@@ -1,0 +1,510 @@
+name: Auto Phase PR
+
+on:
+  push:
+    branches: [ 'setup', 'phase-*' ]
+    paths:
+      - 'docs/phases/phase-*.md'
+
+jobs:
+  create-phase-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }} 
+      
+      - name: Detect completed section or phase
+        id: detect
+        run: |
+          # Extract phase number from branch name (e.g., phase-3-section-... -> 3)
+          CURRENT_BRANCH="${{ github.ref_name }}"
+          PHASE_NUM_FROM_BRANCH=$(echo "$CURRENT_BRANCH" | sed -n 's/.*phase-\([0-9]*\).*/\1/p')
+          
+          IS_COMPLETE=false
+          COMPLETION_TYPE=""
+          
+          # Determine which phase file to check
+          if [ -n "$PHASE_NUM_FROM_BRANCH" ]; then
+            # Branch name contains phase number, check only that phase file
+            PHASE_FILE="docs/phases/phase-${PHASE_NUM_FROM_BRANCH}.md"
+          else
+            # Fallback: check all phase files (for non-phase branches)
+            PHASE_FILE=""
+          fi
+          
+          if [ -z "$PHASE_FILE" ] || [ ! -f "$PHASE_FILE" ]; then
+            # Fallback to checking all phase files if specific file not found
+            PHASE_FILES=$(find docs/phases -name "phase-[0-9]*.md" 2>/dev/null || true)
+            if [ -z "$PHASE_FILES" ]; then
+              echo "No phase files found"
+              echo "is_complete=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            # Use first phase file found (or process all if needed)
+            PHASE_FILE=$(echo "$PHASE_FILES" | head -n1)
+          fi
+          
+          if [ ! -f "$PHASE_FILE" ]; then
+            echo "Phase file not found: $PHASE_FILE"
+            echo "is_complete=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Extract phase number from filename
+          PHASE_NUM=$(echo "$PHASE_FILE" | sed -n 's/.*phase-\([0-9]*\)\.md/\1/p')
+          
+          if [ -z "$PHASE_NUM" ]; then
+            echo "Could not extract phase number from file: $PHASE_FILE"
+            echo "is_complete=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Fetch base branch to compare against
+          BASE_BRANCH="develop"
+          git fetch origin $BASE_BRANCH:$BASE_BRANCH 2>/dev/null || true
+          
+          # Check for section completion
+          # First, try to find which section was just marked complete by checking git diff
+          SECTION_COMPLETE=""
+          
+          # Check git diff to see if a "Section Complete" line was changed from [ ] to [x]
+          if ! git diff --quiet origin/$BASE_BRANCH..HEAD -- "$PHASE_FILE" 2>/dev/null; then
+            # Get the unified diff and look for the line that changed
+            # Find the line number in the current file where "Section Complete" was changed
+            DIFF_OUTPUT=$(git diff -U0 origin/$BASE_BRANCH..HEAD -- "$PHASE_FILE" 2>/dev/null || true)
+            
+            # Look for a line that was added/changed with "[x] Section Complete"
+            if echo "$DIFF_OUTPUT" | grep -q "^+.*\[x\].*Section Complete"; then
+              # Extract the line number from the diff hunk header
+              # Format can be: @@ -12,1 +13,1 @@ or @@ -12 +13 @@
+              # The number after + is the line number in the new file
+              CHANGED_LINE=$(echo "$DIFF_OUTPUT" | grep -B1 "^+.*\[x\].*Section Complete" | grep "^@@" | tail -1 | sed -n 's/.*+\([0-9]*\).*/\1/p' || true)
+              
+              if [ -n "$CHANGED_LINE" ]; then
+                # Find which section this line belongs to
+                # The "Section Complete" line is always the line after the section header
+                # So the section header should be at line (CHANGED_LINE - 1)
+                SECTION_HEADER_LINE=$((CHANGED_LINE - 1))
+                SECTION_HEADER=$(sed -n "${SECTION_HEADER_LINE}p" "$PHASE_FILE" 2>/dev/null || true)
+                
+                if echo "$SECTION_HEADER" | grep -q "^### "; then
+                  SECTION_COMPLETE=$(echo "$SECTION_HEADER" | sed 's/^### //')
+                fi
+              fi
+            fi
+          fi
+          
+          # Fallback: if we couldn't determine from diff, find the last section marked complete
+          # This handles cases where the file was already committed or diff parsing failed
+          if [ -z "$SECTION_COMPLETE" ]; then
+            # Get all sections marked complete, use the last one (most recent in file)
+            while IFS= read -r line; do
+              LINE_NUM=$(echo "$line" | cut -d: -f1)
+              SECTION_NAME=$(echo "$line" | cut -d: -f2- | sed 's/^### //')
+              # Check if the next line after this section header has "Section Complete"
+              NEXT_LINE=$(sed -n "$((LINE_NUM+1))p" "$PHASE_FILE")
+              if echo "$NEXT_LINE" | grep -q "^- \[x\] Section Complete"; then
+                SECTION_COMPLETE="$SECTION_NAME"
+              fi
+            done < <(grep -n "^### " "$PHASE_FILE")
+          fi
+          
+          if [ -n "$SECTION_COMPLETE" ]; then
+            # Extract phase name from title
+            PHASE_NAME=$(grep "^# Phase $PHASE_NUM:" "$PHASE_FILE" | sed "s/^# Phase $PHASE_NUM: //")
+            
+            # Extract objective (from same line as **Objective:** or next line)
+            # First try to extract from same line, if empty get next line
+            PHASE_OBJECTIVE=$(grep "\*\*Objective:\*\*" "$PHASE_FILE" | sed 's/.*\*\*Objective:\*\*[[:space:]]*//' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+            if [ -z "$PHASE_OBJECTIVE" ]; then
+              PHASE_OBJECTIVE=$(awk '/\*\*Objective:\*\*/ {getline; print}' "$PHASE_FILE" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+            fi
+            
+            # Extract tasks for this specific section
+            # Find the section, then get all tasks until next section or end
+            SECTION_START=$(grep -n "^### $SECTION_COMPLETE" "$PHASE_FILE" | cut -d: -f1)
+            NEXT_SECTION=$(awk -v start="$SECTION_START" 'NR > start && /^### / {print NR; exit}' "$PHASE_FILE")
+            
+            if [ -z "$NEXT_SECTION" ]; then
+              # Last section, get until end of file
+              SECTION_TASKS=$(sed -n "${SECTION_START},$ p" "$PHASE_FILE" | grep -E "^- \[[x ]\] T[0-9]+" | sed 's/^- /  - /' || echo "  - (Unable to parse tasks)")
+            else
+              # Get tasks until next section
+              SECTION_TASKS=$(sed -n "${SECTION_START},$((NEXT_SECTION-1))p" "$PHASE_FILE" | grep -E "^- \[[x ]\] T[0-9]+" | sed 's/^- /  - /' || echo "  - (Unable to parse tasks)")
+            fi
+            
+            echo "phase_number=$PHASE_NUM" >> $GITHUB_OUTPUT
+            echo "phase_name=$PHASE_NAME" >> $GITHUB_OUTPUT
+            echo "phase_objective<<EOF" >> $GITHUB_OUTPUT
+            echo "$PHASE_OBJECTIVE" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "section_name=$SECTION_COMPLETE" >> $GITHUB_OUTPUT
+            echo "phase_file=$PHASE_FILE" >> $GITHUB_OUTPUT
+            echo "is_complete=true" >> $GITHUB_OUTPUT
+            echo "completion_type=section" >> $GITHUB_OUTPUT
+            
+            # Store section tasks using multiline output
+            echo "completed_tasks<<EOF" >> $GITHUB_OUTPUT
+            echo "$SECTION_TASKS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            IS_COMPLETE=true
+            COMPLETION_TYPE="section"
+          else
+            # Check if phase is marked complete (for final summary PR)
+            # 1. Check if checkbox is checked: - [x] Phase X Complete
+            CHECKBOX_COMPLETE=$(grep -E "^- \[x\] Phase $PHASE_NUM Complete" "$PHASE_FILE" || true)
+            
+            # 2. Check if status shows Complete
+            STATUS_COMPLETE=$(grep -E "\*\*Status:\*\*.*Complete" "$PHASE_FILE" || true)
+            
+            if [ -n "$CHECKBOX_COMPLETE" ] && [ -n "$STATUS_COMPLETE" ]; then
+              # Extract phase name from title
+              PHASE_NAME=$(grep "^# Phase $PHASE_NUM:" "$PHASE_FILE" | sed "s/^# Phase $PHASE_NUM: //")
+              
+              # Extract objective (from same line as **Objective:** or next line)
+              # First try to extract from same line, if empty get next line
+              PHASE_OBJECTIVE=$(grep "\*\*Objective:\*\*" "$PHASE_FILE" | sed 's/.*\*\*Objective:\*\*[[:space:]]*//' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+              if [ -z "$PHASE_OBJECTIVE" ]; then
+                PHASE_OBJECTIVE=$(awk '/\*\*Objective:\*\*/ {getline; print}' "$PHASE_FILE" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+              fi
+              
+              # Extract all task checklist items (completed or not, we'll list them all)
+              # Match pattern: - [ ] T00X Task description
+              COMPLETED_TASKS=$(grep -E "^- \[[x ]\] T[0-9]+" "$PHASE_FILE" | sed 's/^- /  - /' || echo "  - (Unable to parse tasks)")
+              
+              echo "phase_number=$PHASE_NUM" >> $GITHUB_OUTPUT
+              echo "phase_name=$PHASE_NAME" >> $GITHUB_OUTPUT
+              echo "phase_objective<<EOF" >> $GITHUB_OUTPUT
+              echo "$PHASE_OBJECTIVE" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+              echo "phase_file=$PHASE_FILE" >> $GITHUB_OUTPUT
+              echo "is_complete=true" >> $GITHUB_OUTPUT
+              echo "completion_type=phase" >> $GITHUB_OUTPUT
+              
+              # Store completed tasks using multiline output
+              echo "completed_tasks<<EOF" >> $GITHUB_OUTPUT
+              echo "$COMPLETED_TASKS" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+              
+              IS_COMPLETE=true
+              COMPLETION_TYPE="phase"
+            fi
+          fi
+          
+          if [ "$IS_COMPLETE" = "false" ]; then
+            echo "is_complete=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Determine PR base branch and title
+        if: steps.detect.outputs.is_complete == 'true'
+        id: pr_config
+        run: |
+          CURRENT_BRANCH="${{ github.ref_name }}"
+          COMPLETION_TYPE="${{ steps.detect.outputs.completion_type }}"
+          PHASE_NUM="${{ steps.detect.outputs.phase_number }}"
+          SECTION_NAME="${{ steps.detect.outputs.section_name }}"
+          
+          # For section PRs, always create a section-specific branch to ensure clean PRs
+          # This ensures each section PR only includes commits for that section
+          if [ "$COMPLETION_TYPE" = "section" ]; then
+            # Create section-specific branch name
+            SECTION_SLUG=$(echo "$SECTION_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g')
+            
+            # Determine base branch
+            if [[ "$CURRENT_BRANCH" =~ ^phase- ]]; then
+              # Working from phase branch, PR to develop
+              echo "pr_base=develop" >> $GITHUB_OUTPUT
+              echo "pr_branch=phase-$PHASE_NUM-section-$SECTION_SLUG" >> $GITHUB_OUTPUT
+            else
+              # Working from other branches, PR to master
+              echo "pr_base=master" >> $GITHUB_OUTPUT
+              echo "pr_branch=phase-$PHASE_NUM-section-$SECTION_SLUG" >> $GITHUB_OUTPUT
+            fi
+            
+            echo "pr_title=Phase $PHASE_NUM: $SECTION_NAME" >> $GITHUB_OUTPUT
+          else
+            # Phase completion - use existing branch or create phase-complete branch
+            if [[ "$CURRENT_BRANCH" =~ ^phase- ]]; then
+              echo "pr_base=develop" >> $GITHUB_OUTPUT
+              echo "pr_branch=$CURRENT_BRANCH" >> $GITHUB_OUTPUT
+            else
+              echo "pr_base=master" >> $GITHUB_OUTPUT
+              echo "pr_branch=phase-$PHASE_NUM-complete" >> $GITHUB_OUTPUT
+            fi
+            
+            PHASE_NAME="${{ steps.detect.outputs.phase_name }}"
+            echo "pr_title=Phase $PHASE_NUM: $PHASE_NAME - Complete" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create section branch if needed
+        if: steps.detect.outputs.is_complete == 'true' && steps.detect.outputs.completion_type == 'section'
+        run: |
+          PR_BRANCH="${{ steps.pr_config.outputs.pr_branch }}"
+          CURRENT_BRANCH="${{ github.ref_name }}"
+          BASE_BRANCH="${{ steps.pr_config.outputs.pr_base }}"
+          
+          # Fetch base branch
+          git fetch origin $BASE_BRANCH:$BASE_BRANCH 2>/dev/null || true
+          
+          # Check if section branch already exists remotely
+          if git ls-remote --heads origin "$PR_BRANCH" | grep -q "$PR_BRANCH"; then
+            echo "Section branch $PR_BRANCH already exists remotely"
+            git fetch origin "$PR_BRANCH":"$PR_BRANCH" 2>/dev/null || true
+            git checkout "$PR_BRANCH" 2>/dev/null || git checkout -b "$PR_BRANCH" "origin/$PR_BRANCH"
+            # Merge latest changes from current branch
+            git merge "$CURRENT_BRANCH" --no-edit || true
+          else
+            # Create new section branch from current branch
+            # This will include all commits up to this point, but the PR description
+            # will clarify which section this is for
+            git checkout -b "$PR_BRANCH" "$CURRENT_BRANCH"
+            echo "Created section branch: $PR_BRANCH from $CURRENT_BRANCH"
+          fi
+          
+          # Push the section branch
+          git push -u origin "$PR_BRANCH" || git push origin "$PR_BRANCH"
+      
+      - name: Get changed files and statistics
+        if: steps.detect.outputs.is_complete == 'true'
+        id: files
+        run: |
+          # Get base branch and PR branch for comparison
+          BASE_BRANCH="${{ steps.pr_config.outputs.pr_base }}"
+          PR_BRANCH="${{ steps.pr_config.outputs.pr_branch }}"
+          COMPLETION_TYPE="${{ steps.detect.outputs.completion_type }}"
+          
+          # Fetch base branch to ensure we can compare
+          git fetch origin $BASE_BRANCH:$BASE_BRANCH 2>/dev/null || true
+          
+          # For section PRs, compare section branch to base
+          # For phase PRs, compare current branch to base
+          if [ "$COMPLETION_TYPE" = "section" ]; then
+            # Fetch section branch if it exists remotely
+            git fetch origin $PR_BRANCH:$PR_BRANCH 2>/dev/null || true
+            COMPARE_BRANCH="$PR_BRANCH"
+          else
+            COMPARE_BRANCH="HEAD"
+          fi
+          
+          # Get list of changed files (excluding phase file itself)
+          CHANGED_FILES=$(git diff --name-only origin/$BASE_BRANCH..$COMPARE_BRANCH 2>/dev/null | grep -v 'docs/phases/phase-.*\.md' || echo "")
+          
+          # Count commits
+          COMMIT_COUNT=$(git rev-list --count origin/$BASE_BRANCH..$COMPARE_BRANCH 2>/dev/null || echo "0")
+          
+          # Get file statistics
+          if [ -n "$CHANGED_FILES" ] && [ "$CHANGED_FILES" != "No code changes detected" ]; then
+            FILE_COUNT=$(echo "$CHANGED_FILES" | wc -l | tr -d ' ')
+            
+            # Count additions and deletions (excluding phase file from stats)
+            STATS=$(git diff --shortstat origin/$BASE_BRANCH..$COMPARE_BRANCH 2>/dev/null || echo "")
+            
+            # Format as markdown list
+            echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+            echo "$CHANGED_FILES" | sed 's/^/  - `/; s/$/`/' >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "file_count=$FILE_COUNT" >> $GITHUB_OUTPUT
+            echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+            echo "stats=$STATS" >> $GITHUB_OUTPUT
+          else
+            echo "changed_files=No code changes detected" >> $GITHUB_OUTPUT
+            echo "file_count=0" >> $GITHUB_OUTPUT
+            echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+            echo "stats=" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create Pull Request
+        if: steps.detect.outputs.is_complete == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_API_TOKEN || secrets.GITHUB_TOKEN }}
+          PR_BRANCH: ${{ steps.pr_config.outputs.pr_branch }}
+          PR_BASE: ${{ steps.pr_config.outputs.pr_base }}
+          PR_TITLE: ${{ steps.pr_config.outputs.pr_title }}
+          PHASE_NUMBER: ${{ steps.detect.outputs.phase_number }}
+          PHASE_NAME: ${{ steps.detect.outputs.phase_name }}
+          PHASE_OBJECTIVE: ${{ steps.detect.outputs.phase_objective }}
+          SECTION_NAME: ${{ steps.detect.outputs.section_name }}
+          COMPLETION_TYPE: ${{ steps.detect.outputs.completion_type }}
+          COMPLETED_TASKS: ${{ steps.detect.outputs.completed_tasks }}
+          CHANGED_FILES: ${{ steps.files.outputs.changed_files }}
+          PHASE_FILE: ${{ steps.detect.outputs.phase_file }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Check if PR already exists using GitHub API
+          EXISTING_PR=$(gh pr list --head "$PR_BRANCH" --base "$PR_BASE" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          
+          if [ -n "$EXISTING_PR" ] && [ "$EXISTING_PR" != "null" ]; then
+            echo "PR #$EXISTING_PR already exists, skipping creation"
+            exit 0
+          fi
+          
+          # Get statistics
+          FILE_COUNT="${{ steps.files.outputs.file_count }}"
+          COMMIT_COUNT="${{ steps.files.outputs.commit_count }}"
+          STATS="${{ steps.files.outputs.stats }}"
+          
+          # Create PR body based on completion type
+          if [ "$COMPLETION_TYPE" = "section" ]; then
+            PR_BODY=$(cat <<EOF
+          ## 🎯 Section Completion: Phase $PHASE_NUMBER - $SECTION_NAME
+          
+          This pull request completes the **$SECTION_NAME** section of **Phase $PHASE_NUMBER: $PHASE_NAME**.
+          
+          ---
+          
+          ### 📋 Phase Overview
+          
+          **Phase:** Phase $PHASE_NUMBER: $PHASE_NAME
+          
+          **Objective:** $PHASE_OBJECTIVE
+          
+          **Section:** $SECTION_NAME
+          
+          **Status:** ✅ Section Complete
+          
+          **Phase File:** [View Phase Details]($PHASE_FILE)
+          
+          ---
+          
+          ### ✅ Completed Tasks in This Section
+          
+          $COMPLETED_TASKS
+          
+          ---
+          
+          ### 📊 Changes Summary
+          
+          - **Commits:** $COMMIT_COUNT
+          - **Files Changed:** $FILE_COUNT
+          $([ -n "$STATS" ] && echo "- **Statistics:** $STATS" || echo "")
+          
+          ### 📁 Files Modified
+          
+          $CHANGED_FILES
+          
+          ---
+          
+          ### 🔍 Review Notes
+          
+          - All tasks in this section have been completed and tested
+          - Code follows the project architecture patterns (see [\`docs/architecture.md\`](docs/architecture.md))
+          - Phase file has been updated to reflect section completion status
+          
+          ---
+          
+          ### 📚 Related Documentation
+          
+          - [Architecture Documentation](docs/architecture.md)
+          - [Requirements Documentation](docs/requirements.md)
+          - [Phase Plan Overview](docs/phase-plan.md)
+          
+          ---
+          
+          *This PR was automatically created by GitHub Actions when this section was marked complete.*
+          EOF
+          )
+          else
+            PR_BODY=$(cat <<EOF
+          ## 🎯 Phase Completion: Phase $PHASE_NUMBER - $PHASE_NAME
+          
+          This pull request completes **Phase $PHASE_NUMBER: $PHASE_NAME** and includes all work completed during this phase.
+          
+          ---
+          
+          ### 📋 Phase Overview
+          
+          **Objective:** $PHASE_OBJECTIVE
+          
+          **Status:** ✅ Complete
+          
+          **Phase File:** [View Phase Details]($PHASE_FILE)
+          
+          ---
+          
+          ### ✅ Completed Tasks
+          
+          $COMPLETED_TASKS
+          
+          ---
+          
+          ### 📊 Changes Summary
+          
+          - **Commits:** $COMMIT_COUNT
+          - **Files Changed:** $FILE_COUNT
+          $([ -n "$STATS" ] && echo "- **Statistics:** $STATS" || echo "")
+          
+          ### 📁 Files Modified
+          
+          $CHANGED_FILES
+          
+          ---
+          
+          ### 🔍 Review Notes
+          
+          - All tasks in this phase have been completed and tested
+          - Code follows the project architecture patterns (see [\`docs/architecture.md\`](docs/architecture.md))
+          - Phase file has been updated to reflect completion status
+          
+          ---
+          
+          ### 📚 Related Documentation
+          
+          - [Architecture Documentation](docs/architecture.md)
+          - [Requirements Documentation](docs/requirements.md)
+          - [Phase Plan Overview](docs/phase-plan.md)
+          
+          ---
+          
+          *This PR was automatically created by GitHub Actions when Phase $PHASE_NUMBER was marked complete.*
+          EOF
+          )
+          fi
+          
+          # Try using GitHub CLI first (works with PAT)
+          if gh pr create \
+            --head "$PR_BRANCH" \
+            --base "$PR_BASE" \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY" \
+            --label "section-complete,ready-for-review" 2>/dev/null; then
+            echo "PR created successfully with labels"
+          elif gh pr create \
+            --head "$PR_BRANCH" \
+            --base "$PR_BASE" \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY" 2>/dev/null; then
+            echo "PR created successfully without labels"
+          else
+            # Fallback to REST API with curl
+            echo "GitHub CLI failed, trying REST API..."
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/$REPO/pulls" \
+              -d "{
+                \"title\": \"$PR_TITLE\",
+                \"head\": \"$PR_BRANCH\",
+                \"base\": \"$PR_BASE\",
+                \"body\": $(echo "$PR_BODY" | jq -Rs .)
+              }")
+            
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            
+            if [ "$HTTP_CODE" = "201" ]; then
+              PR_NUMBER=$(echo "$BODY" | jq -r '.number')
+              echo "PR #$PR_NUMBER created successfully via REST API"
+            else
+              echo "Failed to create PR. HTTP code: $HTTP_CODE"
+              echo "Response: $BODY"
+              exit 1
+            fi
+          fi
+

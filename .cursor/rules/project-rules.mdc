@@ -1,0 +1,81 @@
+---
+alwaysApply: true
+---
+## 1. Reference First
+Before generating or modifying any code:
+
+1. Read and internalize:
+   - `@docs/phases/phase-plan.md`
+   - `@docs/architecture.md`
+   - `@docs/requirements.md`
+
+2. Confirm that your planned implementation aligns with these sources before writing any code.
+
+If alignment cannot be confirmed, stop and request clarification.
+
+Proceed only after confirming alignment with these sources.
+
+## 2. Task Execution Order
+- Work on **one task item** at a time.
+- Never combine, reorder, or invent task items.
+- Do not generate or modify unrelated features.
+- When completing tasks, check off completed tasks in the plan file (`@docs/phases/phase-plan.md`) and update plan status indicators.
+
+## 3. Code Quality & Standards
+- Follow established language- and framework-specific best practices (naming, structure, patterns).
+- Maintain code consistency, readability, and clear documentation.
+- Use type safety and linting tools where applicable.
+- Avoid unnecessary abstractions; prioritize clarity and maintainability.
+
+## 4. Verification & Review
+- Each change must include a self-verification step: confirm the code meets requirements and no regressions occur.
+- Where tests exist, ensure they pass; otherwise verify via build and in-game/play-test as appropriate.
+- Use peer review or self-review prompts before marking an item complete.
+
+## 5. Continuous Documentation & Planning
+- When a major feature or milestone is completed:
+  - Update the Architecture Document if the change affects stack, engine, core systems, or deployment.
+  - Add or update tests only when the project has an established test suite for that area.
+  - Update any game design or feature docs that are maintained in the repo.
+
+## 6. Architectural Change Policy
+- Always reference the Architecture Document before making any changes that affect:
+  - Game engine or core frameworks
+  - Core systems (rendering, physics, networking, world gen)
+  - Deployment or build configuration
+  - Multiplayer or data flow
+- If a change is required:
+  - Document the modification in `@docs/architecture.md` (update relevant section + Change Log) before or immediately after implementing it.
+  - Include reasoning, dependencies, and potential impacts.
+
+## 7. Agentic Behavior Rules
+- Never act autonomously beyond the current phase task.
+- If ambiguity exists, pause and request clarification.
+- Always include reasoning based on the referenced documents and rules before execution.
+
+## 8. Verification
+- Ensure there are no build errors before completing your work.
+- Where relevant, confirm the game runs and the changed feature behaves as expected (play-test or automated test).
+
+## 9. Setup Documentation
+- Maintain a `@docs/setup.md` file with chronological setup instructions for developers.
+- **When to add instructions:** Whenever you need the developer to perform a manual action that cannot be automated:
+  - Engine or SDK setup (e.g., runtime, editor)
+  - Environment variable or config file setup
+  - Third-party service or asset pipeline configuration
+  - How to build and run the game locally
+  - Any other manual setup steps required
+- **Format:** Add instructions in chronological order as they are discovered or needed. Include:
+  - Step number and clear description
+  - Where to obtain tools or credentials (links, installers)
+  - Exact file locations and variable names
+  - Commands to build and run the game
+  - Verification steps (e.g., game launches, scene loads)
+- **Initial setup:** If the file doesn't exist, create it with a clear structure and initial setup instructions (e.g., cloning repo, installing dependencies, building and running the game).
+- **Running locally:** Always include instructions on how to build and run the game locally (commands, prerequisites, expected result).
+
+## 10. Human In The Loop
+- For every completed task, include explicit human-verification instructions in your final handoff.
+- Describe the exact entry point (e.g., scene to load, build to run, command to execute), the actions to perform in-game, and the expected outcome so a reviewer can confirm the change.
+- List any automated checks or commands that validate the work and state the success criteria (e.g., build succeeds, tests pass if present, expected in-game behavior).
+- Call out prerequisites or setup requirements needed for verification; if something cannot be verified, note the blocker and proposed workaround.
