@@ -19,7 +19,7 @@
 ### Noise-Based Terrain
 - [ ] Section Complete
 - [x] T016 Add the `noise` crate per `@docs/architecture.md`; use it in the terrain function to generate height (e.g. Perlin/simplex) for terrain.
-- [ ] T017 Define surface layer: above a height threshold use grass (or top block), one layer below use dirt, below that use stone; ensure caves or overhangs are optional for this phase.
+- [x] T017 Define surface layer: above a height threshold use grass (or top block), one layer below use dirt, below that use stone; ensure caves or overhangs are optional for this phase.
 - [ ] T018 Tune terrain scale and height so the world looks varied but navigable; document any magic numbers or config used.
 
 ### Block Types & Materials

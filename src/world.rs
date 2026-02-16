@@ -21,8 +21,13 @@ const TERRAIN_NOISE_FREQ: f64 = 0.02;
 /// Noise amplitude in blocks; height varies by roughly ± this amount.
 const TERRAIN_NOISE_AMP: f64 = 8.0;
 
+/// Material indices for surface layers (T017). T019/T021 formalize block types and persistence.
+const MATERIAL_STONE: u8 = 0;
+const MATERIAL_DIRT: u8 = 1;
+const MATERIAL_GRASS: u8 = 2;
+
 /// Terrain lookup: returns block type (voxel) at world position (T014).
-/// Height is from Perlin noise at (x, z) (T016). Below surface = solid (material 0); at or above = air.
+/// Height from Perlin at (x, z) (T016). Surface layer (T017): top block = grass, one below = dirt, below that = stone.
 #[must_use]
 pub fn terrain_lookup(pos: IVec3) -> WorldVoxel {
     let perlin = terrain_noise();
@@ -31,10 +36,14 @@ pub fn terrain_lookup(pos: IVec3) -> WorldVoxel {
         f64::from(pos.z) * TERRAIN_NOISE_FREQ,
     ]);
     let surface_y = TERRAIN_BASE_Y + (sample * TERRAIN_NOISE_AMP).round() as i32;
-    if pos.y < surface_y {
-        WorldVoxel::Solid(0)
-    } else {
+    if pos.y >= surface_y {
         WorldVoxel::Air
+    } else if pos.y == surface_y - 1 {
+        WorldVoxel::Solid(MATERIAL_GRASS)
+    } else if pos.y == surface_y - 2 {
+        WorldVoxel::Solid(MATERIAL_DIRT)
+    } else {
+        WorldVoxel::Solid(MATERIAL_STONE)
     }
 }
 
