@@ -29,9 +29,10 @@
 
 ### Verification
 - [ ] Section Complete
-- [ ] T010 Run `cargo clippy` (or equivalent) and fix any warnings; ensure no build errors.
+- [x] T010 Run `cargo clippy` (or equivalent) and fix any warnings; ensure no build errors.
 - [ ] T011 Confirm runnable window and clean exit; mark Phase 1 complete when all tasks are done.
 
 ## Lessons Learned
 
 _(To be filled in as phase progresses)_
+ 
